@@ -2,7 +2,7 @@
 
 An AI-assisted debugging flow for the hackathon: ingest an error payload, run a **mock** sandbox with terminal-style logs, use **Claude** (Anthropic) as the fix brain, apply a **heuristic** diff audit (no second LLM), and drive **Approve / Retry** from the **Engine Room** dashboard—no Slack, E2B SDK, GitHub API, or OpenAI SDK required for this track.
 
-**Product vision** (full stack: Sentry → E2B → dual LLM → Slack → GitHub PR) is documented in **`PRD.md`** and **`TDD.md`** at the repo root. This README describes the **3-hour demo** aligned with **`demo_tasks.json`**.
+**Product vision** (full stack: Sentry → E2B → dual LLM → Slack → GitHub PR) is documented in **`PRD.md`** and **`TDD.md`** at the repo root. This README describes the **3-hour demo** aligned with **`demo_tasks.json`**. For a full reference on **what the demo implements** (flows, APIs, modules, vs full product), see **`DEMO.md`**.
 
 ## Quick start (demo)
 
@@ -40,6 +40,36 @@ npm run dev
 - Worker: `POST /api/worker/process` with `{ "incident_id": "<uuid>" }`
 - **Engine Room:** **http://localhost:3000/dashboard?incident=<uuid>**
 
+### Test `POST /api/sentry` (demo task 3)
+
+Use **one line** (broken `\` continuations or smart quotes often trigger `curl: (3) URL rejected` because curl treats stray tokens as extra URLs):
+
+**Without signature check** (leave `SENTRY_WEBHOOK_SECRET` empty in `.env`, restart `npm run dev`):
+
+```bash
+curl -sS -X POST "http://localhost:3000/api/sentry" -H "Content-Type: application/json" -d '{"data":{"issue":{"id":"demo-1"},"event":{"message":"Demo error"}}}'
+```
+
+**With mock signature** — the header value must match `SENTRY_WEBHOOK_SECRET` in `.env` **exactly** (the route compares the string literally, not an HMAC):
+
+```bash
+curl -sS -X POST "http://localhost:3000/api/sentry" -H "Content-Type: application/json" -d '{"data":{"issue":{"id":"demo-1"},"event":{"message":"Demo error"}}}' -H "sentry-hook-signature: <same value as SENTRY_WEBHOOK_SECRET>"
+```
+
+If you see `{"error":"Invalid webhook signature"}`, either fix the header to match `.env`, clear `SENTRY_WEBHOOK_SECRET` and restart the dev server, or confirm you restarted after editing `.env` (Next loads env at startup).
+
+If the response is `{"error":"Failed to create incident"}`, check the **Next.js dev server terminal** for `sentry ingest:` (Supabase error or missing `SUPABASE_*` in `.env`), and confirm `supabase/schema.sql` was applied in the Supabase SQL editor.
+
+### Test `POST /api/worker/process` (demo task 8)
+
+Use a **single line** — the same `\` continuation pitfall as above can make curl treat leftover tokens as extra URLs, so you may see `{"ok":true,...}` **and** `curl: (3)` in one blob:
+
+```bash
+curl -sS -X POST "http://localhost:3000/api/worker/process" -H "Content-Type: application/json" -d '{"incident_id":"YOUR_INCIDENT_UUID"}'
+```
+
+Replace `YOUR_INCIDENT_UUID` with an id from a successful Sentry ingest (or the Supabase `incidents` table).
+
 ### Commands
 
 ```bash
@@ -61,6 +91,7 @@ npm run build
 traceback_ai/
 ├── PRD.md                 # Product spec (root — shared)
 ├── TDD.md                 # Architecture (root — shared)
+├── DEMO.md                # Hackathon demo behavior & API reference
 ├── demo_tasks.json        # Demo build checklist
 ├── app/                   # Next.js App Router
 ├── lib/                   # brain, auditor, sandbox-mock
