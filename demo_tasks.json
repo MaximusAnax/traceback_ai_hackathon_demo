@@ -1,0 +1,74 @@
+[
+  {
+    "task_number": 1,
+    "task_name": "Demo stack — dependencies & env",
+    "prerequisites": "None",
+    "files_to_modify": "/package.json, /tsconfig.json, /.env.example",
+    "developer_prompt": "Align the Next.js project (TypeScript, App Router) with the **3-hour hackathon demo** track. Production dependencies only: `next`, `react`, `react-dom`, `@supabase/supabase-js`, `@anthropic-ai/sdk`. Do **not** add `@e2b/sdk`/`e2b`, `@slack/bolt`, `@octokit/rest`, or `openai`. Keep `tsconfig.json` strict (`strict: true`) and exclude `venv` if present. `.env.example` must list: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `ANTHROPIC_API_KEY`, and optionally `SENTRY_WEBHOOK_SECRET` (for a later mock-verified ingest route).",
+    "success_criteria": "`npm run dev` starts. `npx tsc --noEmit` exits 0. `.env.example` contains the listed keys. `package.json` dependencies match the demo stack (no Slack/E2B/GitHub/OpenAI SDK)."
+  },
+  {
+    "task_number": 2,
+    "task_name": "Supabase schema & typed client (lite)",
+    "prerequisites": "Demo task 1",
+    "files_to_modify": "/supabase/schema.sql, /supabase/mutations.ts",
+    "developer_prompt": "Add SQL for `incidents` and `execution_logs` (minimal columns needed for demo: incident id, status, sentry/payload summary, timestamps; logs with incident_id, message, kind). Export a typed Supabase client and functions: insert incident, update incident status, append execution log. Skip `fix_attempts` unless needed for one screen. Apply schema in the Supabase dashboard (user already has a project).",
+    "success_criteria": "Mutations compile with strict types. Insert/update/log functions exist and match the slim schema."
+  },
+  {
+    "task_number": 3,
+    "task_name": "Mock Sentry ingest",
+    "prerequisites": "Demo task 2",
+    "files_to_modify": "/app/api/sentry/route.ts",
+    "developer_prompt": "POST `/api/sentry`: parse a JSON body defensively (nested fields optional). Extract any available Sentry/issue id and stack/context text. Insert a new incident with status `investigating` via Supabase. **Mock** webhook signature verification (no crypto dependency). Return JSON `{ incident_id }` with 200 on success.",
+    "success_criteria": "curl/Postman with a sample payload returns 200 and a UUID; row appears in Supabase."
+  },
+  {
+    "task_number": 4,
+    "task_name": "Mock sandbox (no E2B package)",
+    "prerequisites": "Demo task 1",
+    "files_to_modify": "/lib/services/sandbox-mock.ts",
+    "developer_prompt": "Implement a **fake** sandbox module: `startSandbox(repoUrl: string)` returns a handle object; `runShellCommand`, `readFiles`, `writeFile` append **canned** log lines (e.g. clone, npm install, npm test fail then pass) to `execution_logs` via Supabase or return strings for the worker to log. No cloud sandbox SDK—pure TypeScript suitable for a live demo if APIs fail.",
+    "success_criteria": "Worker can call the module without network sandbox; logs read like a real terminal for the judges."
+  },
+  {
+    "task_number": 5,
+    "task_name": "Claude brain (single provider, slim loop)",
+    "prerequisites": "Demo task 4",
+    "files_to_modify": "/lib/agents/brain.ts",
+    "developer_prompt": "Use `@anthropic-ai/sdk` only. `runFixLoop(incident, sandbox)` sends the stack trace + context; register **at most three** tools (`read_files`, `run_shell_command`, `write_file`) mapped to the mock sandbox. Cap iterations at **3**. Prefer a short system prompt: staff engineer fixing a TS bug with tests. On API errors, fall back to a **static** suggested patch text so the demo still runs.",
+    "success_criteria": "One code path calls Anthropic with tools; tool results feed back into the loop; loop stops at 3 rounds or completion; no OpenAI import."
+  },
+  {
+    "task_number": 6,
+    "task_name": "Auditor — heuristics only (no second LLM)",
+    "prerequisites": "Demo task 1",
+    "files_to_modify": "/lib/agents/auditor.ts",
+    "developer_prompt": "Export `auditDiff(diff: string): { approved: boolean; reason: string }` using **heuristics** only: reject if diff is empty, if suspiciously large deletions, or if it adds obvious red flags (e.g. many `any` typings). No `openai` package. This replaces GPT-based audit for the hackathon window.",
+    "success_criteria": "Pure functions, strict return type, fast and offline; suitable to swap for an LLM later."
+  },
+  {
+    "task_number": 7,
+    "task_name": "In-app approval (replaces Slack + GitHub PR)",
+    "prerequisites": "Demo task 2",
+    "files_to_modify": "/app/api/demo/approve/route.ts, /app/api/demo/retry/route.ts",
+    "developer_prompt": "Add minimal POST routes (or one route with `action` query) that: **Approve** sets incident status (e.g. `resolved` or `ready`) and stores a **display diff** from prior step if passed in body; **Retry** sets status back to `investigating` or `queued`. No Slack signing, no Octokit. Return JSON success/error.",
+    "success_criteria": "Dashboard buttons can drive status changes without external services."
+  },
+  {
+    "task_number": 8,
+    "task_name": "Worker orchestration (one POST)",
+    "prerequisites": "Demo tasks 3, 5, 6",
+    "files_to_modify": "/app/api/worker/process/route.ts",
+    "developer_prompt": "POST with `{ incident_id }`: sequence—set status `reproducing`, call mock sandbox logging, run brain loop, run heuristic auditor, persist proposed diff text on the incident or in logs, set status `awaiting_approval`. Try/catch with errors logged to `execution_logs`. **Do not** call Slack, E2B SDK, or GitHub.",
+    "success_criteria": "One demo flow from incident id to awaiting_approval with logs visible in DB."
+  },
+  {
+    "task_number": 9,
+    "task_name": "Engine Room UI (polling)",
+    "prerequisites": "Demo task 8",
+    "files_to_modify": "/app/dashboard/page.tsx, /app/dashboard/layout.tsx",
+    "developer_prompt": "Build a simple **Engine Room** page: left panel shows `execution_logs` as a terminal (use **polling** every 1–2s or Supabase Realtime if already wired—polling is OK). Right panel: status stepper from incident status. Add **Approve** / **Retry** buttons calling the demo API routes. Show proposed diff in a `<pre>` or monospace block—**no** PR URL required. Tailwind for styling.",
+    "success_criteria": "Judges see logs update and can approve/retry from the browser; no Slack or GitHub account needed for the demo."
+  }
+]

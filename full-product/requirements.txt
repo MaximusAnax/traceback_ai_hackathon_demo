@@ -1,0 +1,4 @@
+# Python orchestrator (main.py — CrewAI build loop)
+crewai>=1.0
+python-dotenv>=1.0
+pydantic>=2.0

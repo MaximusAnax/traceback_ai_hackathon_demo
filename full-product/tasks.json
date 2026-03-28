@@ -1,0 +1,82 @@
+[
+    {
+      "task_number": 1,
+      "task_name": "Project Initialization & Dependency Installation",
+      "prerequisites": "None",
+      "files_to_modify": "/package.json, /tsconfig.json, /.env.example",
+      "developer_prompt": "For the **full product** track, initialize Next.js (TypeScript, App Router) with: `@supabase/supabase-js`, `@anthropic-ai/sdk`, `@e2b` or `@e2b/sdk`, `@slack/bolt`, `@octokit/rest`, `openai`, and document env vars for Supabase, Sentry, Slack, GitHub, Anthropic, OpenAI, E2B. **Hackathon demo (3h) track:** follow `demo_tasks.json` instead—trimmed deps (Next + Supabase + Anthropic only) and `.env.example` without Slack/GitHub/E2B/OpenAI.",
+      "success_criteria": "npm run dev starts successfully. package.json and .env.example match the active track (full vs demo). tsc --noEmit returns zero errors."
+    },
+    {
+      "task_number": 2,
+      "task_name": "Database Schema Initialization",
+      "prerequisites": "Task 1",
+      "files_to_modify": "/supabase/mutations.ts, /supabase/schema.sql",
+      "developer_prompt": "Create a file /supabase/schema.sql containing the exact SQL schema provided in the TDD for incidents, execution_logs, and fix_attempts tables. Then, create /supabase/mutations.ts exporting an initialized Supabase client using @supabase/supabase-js (fetching credentials from process.env). In mutations.ts, write specific, typed functions to: 1) Insert a new incident and return its UUID. 2) Update an incident's status. 3) Insert a row into execution_logs. 4) Insert a row into fix_attempts.",
+      "success_criteria": "/supabase/mutations.ts exports the four requested functions. TypeScript types for the database tables are defined and strict. No syntax errors in the SQL schema file."
+    },
+    {
+      "task_number": 3,
+      "task_name": "Sentry Webhook Ingestion Endpoint",
+      "prerequisites": "Task 2",
+      "files_to_modify": "/app/api/sentry/route.ts",
+      "developer_prompt": "Create a POST route at /app/api/sentry/route.ts to ingest Sentry webhooks. The route must: 1) Extract the Sentry ID, stack trace, and context metadata (file paths, line numbers) from the JSON payload. 2) Call the Supabase mutation to insert a new incident with status 'investigating'. 3) Return a 200 OK response with the generated incident_id. Mock the signature verification for this iteration, but parse the payload defensively assuming nested objects might be undefined.",
+      "success_criteria": "Sending a mock Sentry JSON payload via POST returns a 200 status code and a valid UUID. The Supabase insert function is called with the correct mapped arguments."
+    },
+    {
+      "task_number": 4,
+      "task_name": "E2B Sandbox Orchestration Service",
+      "prerequisites": "Task 1",
+      "files_to_modify": "/lib/services/e2b.ts",
+      "developer_prompt": "Create the E2B orchestration service in /lib/services/e2b.ts. Write a function startSandbox(repoUrl: string) that initializes an E2B headless Linux environment. Within this environment, execute shell commands to git clone the provided repoUrl, cd into it, and run npm install. Expose functions mapped directly to the TDD tools: readFiles(sandbox, paths: string[]), runShellCommand(sandbox, command: string), and writeFile(sandbox, path: string, content: string). Ensure error handling if npm install fails.",
+      "success_criteria": "The code successfully instantiates an E2B Sandbox instance using the SDK. The three specified wrapper functions correctly call the underlying E2B filesystem and process execution APIs."
+    },
+    {
+      "task_number": 5,
+      "task_name": "Claude 'Brain' Agent & Tool Setup",
+      "prerequisites": "Task 4",
+      "files_to_modify": "/lib/agents/brain.ts",
+      "developer_prompt": "Implement the core agent logic using the Anthropic SDK in /lib/agents/brain.ts. Initialize Claude 4.6 Sonnet with a System Prompt defining it as a Senior Staff Engineer tasked with fixing bugs via vitest/jest reproductions. Define the three tools for Claude's API payload: read_files, run_shell_command, and write_file. Create an execution loop function runFixLoop(incidentData, sandbox) that feeds the Sentry stack trace to Claude, allowing it to call tools, executing those tools against the E2B sandbox from Task 4, and returning the results to Claude. Cap the loop at 3 iterations to respect the 'Wall' protocol.",
+      "success_criteria": "The Anthropic API call correctly registers the three tools. The execution loop handles tool-use stop reasons, executes the local E2B functions, and appends tool results back to the message history. The loop terminates after exactly 3 attempts."
+    },
+    {
+      "task_number": 6,
+      "task_name": "The Auditor Gatekeeper (GPT-5.4 Mini)",
+      "prerequisites": "Task 1",
+      "files_to_modify": "/lib/agents/auditor.ts",
+      "developer_prompt": "Implement the Auditor LLM in /lib/agents/auditor.ts using the OpenAI SDK. Create a function auditDiff(diffContent: string) that sends a git diff to GPT-5.4 Mini. The system prompt must enforce the anti-hallucination guardrails: It must reject diffs that delete core functionality or rely heavily on any types. The function must return a strictly typed JSON object: { 'approved': boolean, 'reason': string }.",
+      "success_criteria": "The OpenAI API call utilizes JSON mode or structured outputs to guarantee the { approved, reason } response format. The system prompt explicitly contains the rules against functional deletion and type stripping."
+    },
+    {
+      "task_number": 7,
+      "task_name": "GitHub PR Creation Service",
+      "prerequisites": "Task 1",
+      "files_to_modify": "/lib/services/github.ts",
+      "developer_prompt": "Implement GitHub interactions in /lib/services/github.ts using @octokit/rest. Create a function createFixPR(repoOwner, repoName, baseBranch, diffContent, sentryId, explanation). The function must: 1) Create a new branch fix/traceback-[sentry-id]. 2) Apply the git diff. 3) Commit with the message 'fix: resolve error via TraceBack AI'. 4) Open a Pull Request containing the explanation in the PR body. Return the PR URL.",
+      "success_criteria": "The Octokit sequence properly chains branch creation, blob creation, tree updates, and commit creation. The final output is a valid GitHub PR URL string."
+    },
+    {
+      "task_number": 8,
+      "task_name": "Slack Bridge & Webhook Handlers",
+      "prerequisites": "Task 1, Task 2",
+      "files_to_modify": "/lib/services/slack.ts, /app/api/slack/route.ts",
+      "developer_prompt": "First, create /lib/services/slack.ts to format and send messages to Slack. Create a function postBugSummary(incident) that posts the initial bug finding, and postApprovalRequest(incident, fixLogic) that posts the proposed fix with interactive 'Approve' and 'Retry' buttons. Store the slack_thread_ts in Supabase. Second, create the /app/api/slack/route.ts POST endpoint to handle Slack interactivity. If 'Approve' is clicked, it must trigger the GitHub PR service. If 'Retry' is clicked, update the incident status.",
+      "success_criteria": "Slack block kit formatting is valid. The interaction endpoint correctly parses Slack's payload body, validates the action ID, and routes to the appropriate next step without crashing."
+    },
+    {
+      "task_number": 9,
+      "task_name": "Main Process Worker Engine",
+      "prerequisites": "Task 3, Task 5, Task 6, Task 7, Task 8",
+      "files_to_modify": "/app/api/worker/process/route.ts",
+      "developer_prompt": "Build the central nervous system at /app/api/worker/process/route.ts. This POST endpoint takes an incident_id. It must: 1) Update Supabase status to 'reproducing'. 2) Boot E2B (Task 4). 3) Log 'npm_install' to execution_logs. 4) Trigger the Claude Brain (Task 5). 5) Capture stdout and log all tool uses to execution_logs. 6) Run the Auditor (Task 6). 7) If approved, notify Slack via postApprovalRequest (Task 8) and update status to 'awaiting_approval'. Wrap all steps in try/catch to log errors to Supabase.",
+      "success_criteria": "The endpoint seamlessly orchestrates all imported services. Database updates for execution_logs are made continuously throughout the process, ensuring the frontend has real-time data."
+    },
+    {
+      "task_number": 10,
+      "task_name": "Engine Room Frontend (Demo UI)",
+      "prerequisites": "Task 9",
+      "files_to_modify": "/app/dashboard/page.tsx, /app/dashboard/layout.tsx",
+      "developer_prompt": "Build the 'Engine Room' UI in /app/dashboard/page.tsx. Use Tailwind CSS. Create a split-screen view. Left Side: A terminal-styled black window that subscribes to the execution_logs Supabase table using Realtime, auto-scrolling to the latest log. Right Side: A visual step progress bar reflecting the incident status (Investigating -> Reproducing -> Fixing -> Auditing -> Awaiting Approval -> Resolved). Fetch initial state server-side, then hydrate with Supabase client-side subscriptions.",
+      "success_criteria": "The UI renders without hydration errors. Adding a manual row to the execution_logs table in Supabase instantly appears in the UI terminal via WebSockets. The progress bar accurately maps database statuses to visual steps."
+    }
+  ]

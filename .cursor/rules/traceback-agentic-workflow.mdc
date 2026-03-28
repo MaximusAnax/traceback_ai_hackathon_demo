@@ -1,0 +1,35 @@
+---
+description: TraceBack AI — Cursor-integrated build loop, context, and constraints
+alwaysApply: true
+---
+
+# TraceBack AI — Agentic workflow in Cursor
+
+This repo uses a **human-in-the-loop** loop (optional **CrewAI** driver in `full-product/main.py`): Tech Lead emits an implementation prompt → you implement in Cursor → QA audits. For the **hackathon demo**, follow **`demo_tasks.json`** at the repo root. Follow these practices so the AI assistant stays aligned and efficient.
+
+## Context (`@`)
+
+- In **every** implementation chat for a build step, attach **`TDD.md`** and **`PRD.md`** via `@`, plus **`@`** each file or folder you will edit (from the step’s “files to modify” list).
+- Do not paste entire specs into the chat; `@` references keep context fresh and avoid redundant dumps.
+
+## Modes
+
+- **Agent mode** (or Composer): multi-file edits and implementation for the current step.
+- **Ask / Chat**: questions, tradeoffs, or reviewing a diff without editing—use a separate short thread.
+
+## One step = one thread
+
+- Start a **new** Agent chat per task step from `demo_tasks.json` (demo) or `full-product/tasks.json` (full plan) so context does not bleed across unrelated changes.
+
+## Instructions style
+
+- State **goal**, **files**, **non-goals** (“do not change X”), and **how to verify** (commands from success criteria).
+- Prefer **short follow-ups** (“now add error handling only in `route.ts`”) over one giant message.
+
+## Project truth
+
+- Architecture and schema: **`TDD.md`**. Product scope: **`PRD.md`**. If something conflicts, **TDD/PRD win** unless the CTO explicitly changes them.
+
+## Output hygiene
+
+- Avoid pasting whole files back into the chat; cite paths and line ranges when discussing issues.
